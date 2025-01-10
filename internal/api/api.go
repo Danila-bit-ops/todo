@@ -31,11 +31,18 @@ func (a *api) InitHandlers(r *gin.Engine) {
 
 	apiGroup := r.Group("/api")
 	{
-		apiGroup.GET("/tasks", a.GetAllTasks)
-		apiGroup.POST("/addtask", a.AddTask)
-		apiGroup.DELETE("/deletetask/:id", a.DeleteTask)
-		apiGroup.PUT("/toggle/:id", a.ToggleTaskCompletion)
-		apiGroup.DELETE("/clearcompleted", a.ClearCompletedTasks)
+		apiGroup.POST("/register", a.RegisterUser)
+		apiGroup.POST("/login", a.LoginUser)
+
+		protected := apiGroup.Group("/")
+		protected.Use(pkg.AuthMiddleware())
+		{
+			protected.GET("/tasks", a.GetAllTasks)
+			protected.POST("/addtask", a.AddTask)
+			protected.DELETE("/deletetask/:id", a.DeleteTask)
+			protected.PUT("/toggle/:id", a.ToggleTaskCompletion)
+			protected.DELETE("/clearcompleted", a.ClearCompletedTasks)
+		}
 	}
 }
 
