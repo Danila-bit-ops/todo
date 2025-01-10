@@ -5,8 +5,10 @@ import (
 	"strconv"
 	"togolist/internal/model"
 	"togolist/internal/service"
+	"togolist/pkg"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type api struct {
@@ -41,6 +43,55 @@ func (a *api) InitRouter() *gin.Engine {
 	router := gin.Default()
 	a.InitHandlers(router)
 	return router
+}
+
+func (a *api) RegisterUser(c *gin.Context) {
+	var user model.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+	user.Password = string(hashedPassword)
+
+	if err := a.srv.RegisterUser(c.Request.Context(), user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (a *api) LoginUser(c *gin.Context) {
+	var input model.LoginInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := a.srv.GetUserByEmail(c.Request.Context(), input.Email)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный email или пароль"})
+		return
+	}
+
+	// Сравнение хешированного пароля
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный email или пароль"})
+		return
+	}
+
+	// Генерация JWT
+	token, err := pkg.GenerateToken(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при генерации токена"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
 func (a *api) GetAllTasks(c *gin.Context) {
